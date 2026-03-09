@@ -48,6 +48,35 @@ run_or_warn_silent apt-get install -y \
     python3 python3-pip python3-venv \
     sqlmap wfuzz gobuster nikto wpscan dirb
 
+# Optimize SSH session performance
+ensure_sshd_setting() {
+  local key="$1"
+  local val="$2"
+  local conf="/etc/ssh/sshd_config"
+
+  if [ ! -f "$conf" ]; then
+    warn "Missing $conf; skipping SSH optimization"
+    return 0
+  fi
+
+  if grep -qE "^[#[:space:]]*${key}\\b" "$conf"; then
+    run_or_warn sed -i "s|^[#[:space:]]*${key}\\b.*|${key} ${val}|g" "$conf"
+  else
+    run_or_warn bash -c "echo '${key} ${val}' >> ${conf}"
+  fi
+}
+
+ensure_sshd_setting "UseDNS" "no"
+ensure_sshd_setting "GSSAPIAuthentication" "no"
+ensure_sshd_setting "ClientAliveInterval" "120"
+ensure_sshd_setting "ClientAliveCountMax" "3"
+
+if command -v systemctl >/dev/null 2>&1; then
+  run_or_warn_silent systemctl restart ssh || run_or_warn_silent systemctl restart sshd
+else
+  run_or_warn_silent service ssh restart || run_or_warn_silent service sshd restart
+fi
+
 # Create a dedicated directory for the assistant
 run_or_warn mkdir -p /opt/red-lab-assistant
 if [ -d /tmp/capstone-userstack/red-lab-assistant ]; then
