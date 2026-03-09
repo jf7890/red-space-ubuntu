@@ -20,8 +20,8 @@ source "proxmox-iso" "ubuntu-server" {
 
   # VM general
   vm_id                = 0
-  vm_name              = "tpl-ubuntu-server"
-  template_description = "Ubuntu Server (Capstone)"
+  vm_name              = "tpl-red-ubuntu-server"
+  template_description = "Red Team Lab Ubuntu Server (Web Pentest + AI Assistant)"
   os                   = "l26"
 
   boot_iso {

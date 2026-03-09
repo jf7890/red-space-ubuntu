@@ -1,0 +1,17 @@
+[Unit]
+Description=Red Lab Web Assistant
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/red-lab-assistant
+Environment="PATH=/opt/red-lab-assistant/venv/bin"
+# Run Streamlit on 0.0.0.0 port 8501 without opening browser automatically
+ExecStart=/opt/red-lab-assistant/venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
