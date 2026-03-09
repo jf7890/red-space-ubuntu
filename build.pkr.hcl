@@ -20,9 +20,21 @@ build {
     destination = "/tmp/capstone-userstack/red-lab-assistant"
   }
 
+  # Fallback path (provision-redstack.sh checks /tmp/red-lab-assistant too)
+  provisioner "file" {
+    source      = "files/red-lab-assistant/"
+    destination = "/tmp/red-lab-assistant"
+  }
+
   provisioner "file" {
     source      = "files/red-lab-assistant.service"
     destination = "/tmp/capstone-userstack/red-lab-assistant.service"
+  }
+
+  # Fallback service path
+  provisioner "file" {
+    source      = "files/red-lab-assistant.service"
+    destination = "/tmp/red-lab-assistant.service"
   }
 
   provisioner "shell" {

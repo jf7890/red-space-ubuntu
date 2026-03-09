@@ -73,7 +73,11 @@ TOOL_PKGS=(
 
 run_or_die apt-get install -y --no-install-recommends "${BASE_PKGS[@]}"
 for pkg in "${TOOL_PKGS[@]}"; do
-  run_or_warn_silent apt-get install -y --no-install-recommends "$pkg"
+  if apt-cache show "$pkg" >/dev/null 2>&1; then
+    run_or_warn_silent apt-get install -y --no-install-recommends "$pkg"
+  else
+    warn "Package not found in APT: $pkg (skipping)"
+  fi
 done
 
 # Optimize SSH session performance
@@ -154,14 +158,21 @@ fi
 
 # Install systemd service for Assistant
 ASSIST_SERVICE_INSTALLED=0
+ASSIST_SERVICE_SRC=""
 if [ -f /tmp/capstone-userstack/red-lab-assistant.service ]; then
-  run_or_die cp /tmp/capstone-userstack/red-lab-assistant.service /etc/systemd/system/
+  ASSIST_SERVICE_SRC="/tmp/capstone-userstack/red-lab-assistant.service"
+elif [ -f /tmp/red-lab-assistant.service ]; then
+  ASSIST_SERVICE_SRC="/tmp/red-lab-assistant.service"
+fi
+
+if [ -n "$ASSIST_SERVICE_SRC" ]; then
+  run_or_die cp "$ASSIST_SERVICE_SRC" /etc/systemd/system/
   ASSIST_SERVICE_INSTALLED=1
 else
   if [ "$ASSIST_REQUIRED" = "1" ]; then
-    die "Missing red-lab-assistant.service in /tmp/capstone-userstack"
+    die "Missing red-lab-assistant.service under /tmp"
   else
-    warn "Missing red-lab-assistant.service in /tmp/capstone-userstack"
+    warn "Missing red-lab-assistant.service under /tmp"
   fi
 fi
 if command -v systemctl >/dev/null 2>&1; then
