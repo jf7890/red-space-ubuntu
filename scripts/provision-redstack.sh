@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -e
+set -o pipefail
 
 warn() {
   echo "WARN: $*" >&2
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
 }
 
 run_or_warn() {
@@ -27,9 +33,23 @@ run_or_warn_silent() {
   return 0
 }
 
+run_or_die() {
+  set +e
+  "$@"
+  local rc=$?
+  set -e
+  if [ $rc -ne 0 ]; then
+    die "command failed (rc=${rc}): $*"
+  fi
+  return 0
+}
+
 # Update and install dependencies
 export DEBIAN_FRONTEND=noninteractive
-run_or_warn_silent apt-get update -y
+ASSIST_REQUIRED="${ASSIST_REQUIRED:-1}"
+TMUX_AUTOSTART="${TMUX_AUTOSTART:-1}"
+
+run_or_die apt-get update -y
 
 echo "[0/5] Ensure Universe repository"
 run_or_warn_silent apt-get install -y --no-install-recommends software-properties-common
@@ -43,10 +63,18 @@ fi
 run_or_warn_silent apt-get upgrade -y
 
 # Install standard utilities and Web Pentest tools
-run_or_warn_silent apt-get install -y \
-    curl wget vim git htop tmux unzip jq \
-    python3 python3-pip python3-venv \
-    sqlmap wfuzz gobuster nikto wpscan dirb
+BASE_PKGS=(
+  curl wget vim git htop tmux unzip jq
+  python3 python3-pip python3-venv
+)
+TOOL_PKGS=(
+  sqlmap wfuzz gobuster nikto wpscan dirb
+)
+
+run_or_die apt-get install -y --no-install-recommends "${BASE_PKGS[@]}"
+for pkg in "${TOOL_PKGS[@]}"; do
+  run_or_warn_silent apt-get install -y --no-install-recommends "$pkg"
+done
 
 # Optimize SSH session performance
 ensure_sshd_setting() {
@@ -78,53 +106,103 @@ else
 fi
 
 # Create a dedicated directory for the assistant
-run_or_warn mkdir -p /opt/red-lab-assistant
+run_or_die mkdir -p /opt/red-lab-assistant
+
+ASSIST_SRC=""
 if [ -d /tmp/capstone-userstack/red-lab-assistant ]; then
-  run_or_warn cp -r /tmp/capstone-userstack/red-lab-assistant/* /opt/red-lab-assistant/
-else
-  warn "No assistant files found in /tmp/capstone-userstack/red-lab-assistant"
+  ASSIST_SRC="/tmp/capstone-userstack/red-lab-assistant"
+elif [ -d /tmp/capstone-userstack ] && [ -f /tmp/capstone-userstack/app.py ]; then
+  ASSIST_SRC="/tmp/capstone-userstack"
+elif [ -d /tmp/red-lab-assistant ]; then
+  ASSIST_SRC="/tmp/red-lab-assistant"
+elif [ -d /tmp/capstone-userstack/red-lab-assistant/red-lab-assistant ]; then
+  ASSIST_SRC="/tmp/capstone-userstack/red-lab-assistant/red-lab-assistant"
 fi
-run_or_warn chown -R ubuntu:ubuntu /opt/red-lab-assistant
+
+if [ -n "$ASSIST_SRC" ]; then
+  run_or_die cp -r "$ASSIST_SRC"/* /opt/red-lab-assistant/
+else
+  if [ "$ASSIST_REQUIRED" = "1" ]; then
+    die "No assistant files found under /tmp (expected red-lab-assistant). Set ASSIST_REQUIRED=0 to skip."
+  else
+    warn "No assistant files found under /tmp (expected red-lab-assistant); skipping install."
+  fi
+fi
+
+run_or_die chown -R ubuntu:ubuntu /opt/red-lab-assistant
 
 # Setup Virtual Environment for Assistant
-run_or_warn_silent su - ubuntu -c "python3 -m venv /opt/red-lab-assistant/venv"
-run_or_warn_silent su - ubuntu -c "/opt/red-lab-assistant/venv/bin/pip install --upgrade pip"
-if [ -f "/opt/red-lab-assistant/requirements.txt" ]; then
-    run_or_warn_silent su - ubuntu -c "/opt/red-lab-assistant/venv/bin/pip install -r /opt/red-lab-assistant/requirements.txt"
+if command -v python3 >/dev/null 2>&1; then
+  run_or_die su - ubuntu -c "python3 -m venv /opt/red-lab-assistant/venv"
+  run_or_die su - ubuntu -c "/opt/red-lab-assistant/venv/bin/pip install --upgrade pip"
+  if [ -f "/opt/red-lab-assistant/requirements.txt" ]; then
+    run_or_die su - ubuntu -c "/opt/red-lab-assistant/venv/bin/pip install --no-cache-dir -r /opt/red-lab-assistant/requirements.txt"
+  else
+    if [ "$ASSIST_REQUIRED" = "1" ]; then
+      die "Missing /opt/red-lab-assistant/requirements.txt"
+    else
+      warn "Missing /opt/red-lab-assistant/requirements.txt; skipping pip install"
+    fi
+  fi
+else
+  if [ "$ASSIST_REQUIRED" = "1" ]; then
+    die "python3 not available; cannot setup assistant venv"
+  else
+    warn "python3 not available; skipping venv setup"
+  fi
 fi
 
 # Install systemd service for Assistant
+ASSIST_SERVICE_INSTALLED=0
 if [ -f /tmp/capstone-userstack/red-lab-assistant.service ]; then
-  run_or_warn cp /tmp/capstone-userstack/red-lab-assistant.service /etc/systemd/system/
+  run_or_die cp /tmp/capstone-userstack/red-lab-assistant.service /etc/systemd/system/
+  ASSIST_SERVICE_INSTALLED=1
 else
-  warn "Missing red-lab-assistant.service in /tmp/capstone-userstack"
+  if [ "$ASSIST_REQUIRED" = "1" ]; then
+    die "Missing red-lab-assistant.service in /tmp/capstone-userstack"
+  else
+    warn "Missing red-lab-assistant.service in /tmp/capstone-userstack"
+  fi
 fi
 if command -v systemctl >/dev/null 2>&1; then
-  run_or_warn_silent systemctl daemon-reload
-  run_or_warn_silent systemctl enable red-lab-assistant.service
-  run_or_warn_silent systemctl start red-lab-assistant.service
+  if [ "$ASSIST_SERVICE_INSTALLED" = "1" ]; then
+    run_or_die systemctl daemon-reload
+    run_or_die systemctl enable red-lab-assistant.service
+    run_or_die systemctl start red-lab-assistant.service
+  else
+    warn "Assistant service not installed; skipping enable/start"
+  fi
 else
   warn "systemctl not available; skipping service enable/start"
 fi
 
 # Configure tmux to auto-start for ubuntu user to enable "Context-Awareness"
-cat << 'EOF' >> /home/ubuntu/.bashrc || true
+if [ "$TMUX_AUTOSTART" = "1" ] && [ -f /home/ubuntu/.bashrc ]; then
+  if ! grep -q "RED_LAB_TMUX_AUTOSTART" /home/ubuntu/.bashrc; then
+    cat << 'EOF' >> /home/ubuntu/.bashrc || true
 
-# Auto-start tmux session 'red_session' if not in one
-if [ -z "$TMUX" ]; then
+# RED_LAB_TMUX_AUTOSTART
+# Red Lab: tmux autostart (interactive shells only)
+if [[ $- == *i* ]] && [ -z "${TMUX:-}" ]; then
     tmux attach-session -t red_session || tmux new-session -s red_session
 fi
 EOF
-run_or_warn chown ubuntu:ubuntu /home/ubuntu/.bashrc
+  fi
+  run_or_warn chown ubuntu:ubuntu /home/ubuntu/.bashrc
+fi
 
 # Enable cloud-init units that exist
-for svc in cloud-init-local.service cloud-init.service cloud-config.service cloud-final.service; do
-  if systemctl list-unit-files "$svc" --no-legend 2>/dev/null | awk '{print $1}' | grep -qx "$svc"; then
-    run_or_warn_silent systemctl enable "$svc"
-  else
-    warn "Skipping enable $svc (unit not found)"
-  fi
-done
+if command -v systemctl >/dev/null 2>&1; then
+  for svc in cloud-init-local.service cloud-init.service cloud-config.service cloud-final.service; do
+    if systemctl list-unit-files "$svc" --no-legend 2>/dev/null | awk '{print $1}' | grep -qx "$svc"; then
+      run_or_warn_silent systemctl enable "$svc"
+    else
+      warn "Skipping enable $svc (unit not found)"
+    fi
+  done
+else
+  warn "systemctl not available; skipping cloud-init enable"
+fi
 
 # Optional: inject SSH public key
 if [[ -n "${PACKER_SSH_PUBLIC_KEY:-}" && -d /home/ubuntu ]]; then

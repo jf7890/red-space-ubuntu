@@ -6,7 +6,8 @@ After=network.target
 User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/red-lab-assistant
-Environment="PATH=/opt/red-lab-assistant/venv/bin"
+Environment="PATH=/opt/red-lab-assistant/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
 # Run Streamlit on 0.0.0.0 port 8501 without opening browser automatically
 ExecStart=/opt/red-lab-assistant/venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
 

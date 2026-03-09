@@ -1,11 +1,13 @@
-export PROXMOX_URL="https://10.10.100.1:8006/api2/json"
+# Example environment variables for local Packer builds.
+# Do not store real secrets in git.
+export PROXMOX_URL="https://<PVE-IP>:8006/api2/json"
 export PROXMOX_USERNAME="root@pam!packer"
-export PROXMOX_TOKEN="28786dd2-1eed-44e6-b8a4-dc2221ce384d"
+export PROXMOX_TOKEN="<REDACTED>"
 export PROXMOX_NODE="homelab"
 export PACKER_ISO_STORAGE="hdd-data"
-export PACKER_BRIDGE_LAN="nonet"
-export PACKER_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO1ut0z46xZh4zNQjVtm65bC7EvkBUQAFfGqswaXD53n root@red-client"
+export PACKER_BRIDGE_LAN="vmbr0"
+export PACKER_SSH_PUBLIC_KEY="ssh-ed25519 AAAA... user@host"
+export PACKER_SSH_PRIVATE_KEY="C:\\path\\to\\packer_id_ed25519"
 
-export PACKER_SSH_PRIVATE_KEY=/root/.ssh/packer_id_ed25519
-
-variables.auto.pkrvars.hcl.example
+# Example vars file:
+# variables.auto.pkrvars.hcl.example

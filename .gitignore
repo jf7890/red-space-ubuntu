@@ -10,6 +10,26 @@ crash.log
 # version control as they are data points which are potentially sensitive and 
 # subject to change depending on the environment.
 #
+*.pkrvars.hcl
+*.auto.pkrvars.hcl
+
+# Env files
+.env
+.env.*
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
 
 # For built boxes
 *.box
