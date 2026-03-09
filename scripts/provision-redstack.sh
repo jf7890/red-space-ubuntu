@@ -123,10 +123,20 @@ elif [ -d /tmp/capstone-userstack/red-lab-assistant/red-lab-assistant ]; then
   ASSIST_SRC="/tmp/capstone-userstack/red-lab-assistant/red-lab-assistant"
 fi
 
+# Fallback search under /tmp if paths are unexpected
+if [ -z "$ASSIST_SRC" ] && command -v find >/dev/null 2>&1; then
+  FOUND_APP="$(find /tmp -maxdepth 4 -type f -name app.py -path '*red-lab-assistant*' -print -quit 2>/dev/null)"
+  if [ -n "$FOUND_APP" ]; then
+    ASSIST_SRC="$(dirname "$FOUND_APP")"
+  fi
+fi
+
 if [ -n "$ASSIST_SRC" ]; then
   run_or_die cp -r "$ASSIST_SRC"/* /opt/red-lab-assistant/
 else
   if [ "$ASSIST_REQUIRED" = "1" ]; then
+    warn "Assistant search paths checked under /tmp. Contents:"
+    run_or_warn_silent ls -la /tmp
     die "No assistant files found under /tmp (expected red-lab-assistant). Set ASSIST_REQUIRED=0 to skip."
   else
     warn "No assistant files found under /tmp (expected red-lab-assistant); skipping install."

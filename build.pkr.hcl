@@ -16,14 +16,14 @@ build {
   }
 
   provisioner "file" {
-    source      = "files/red-lab-assistant/"
-    destination = "/tmp/capstone-userstack/red-lab-assistant"
+    source      = "files/red-lab-assistant"
+    destination = "/tmp/capstone-userstack/"
   }
 
   # Fallback path (provision-redstack.sh checks /tmp/red-lab-assistant too)
   provisioner "file" {
-    source      = "files/red-lab-assistant/"
-    destination = "/tmp/red-lab-assistant"
+    source      = "files/red-lab-assistant"
+    destination = "/tmp/"
   }
 
   provisioner "file" {
